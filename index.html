@@ -78,6 +78,17 @@ li{margin:8px 0}
 </div>
 
 <div class="panel">
+<h3>TRANSFER JARVIS BETWEEN DEVICES</h3>
+<p class="small">Move your saved memory, notes, tasks, settings, and recent conversation to another device.</p>
+<div class="controls">
+<button onclick="exportJarvisData()">EXPORT MEMORY</button>
+<button onclick="document.getElementById('importFile').click()">IMPORT MEMORY</button>
+</div>
+<input id="importFile" type="file" accept=".json,application/json" style="display:none" onchange="importJarvisData(event)">
+<p class="small">Export a backup on this device, then import that file on your other device. Importing replaces that device's current JARVIS memory.</p>
+</div>
+
+<div class="panel">
 <h3>YOUR NOTES</h3>
 <textarea id="noteInput" rows="2" placeholder="Write a note..."></textarea>
 <button onclick="addNote()">SAVE NOTE</button>
@@ -274,6 +285,76 @@ function renderTasks(){
  });
 }
 
+function exportJarvisData(){
+ const backup={
+  app:"JARVIS AI",
+  formatVersion:1,
+  exportedAt:new Date().toISOString(),
+  memory:memory,
+  aiHistory:aiHistory
+ };
+ const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob);
+ const link=document.createElement("a");
+ link.href=url;
+ link.download="jarvis-memory-backup.json";
+ document.body.appendChild(link);
+ link.click();
+ link.remove();
+ URL.revokeObjectURL(url);
+ reply("Your JARVIS backup has been exported. Move the JSON file to your other device, then choose IMPORT MEMORY.");
+}
+
+function importJarvisData(event){
+ const file=event.target.files&&event.target.files[0];
+ if(!file)return;
+ const reader=new FileReader();
+ reader.onload=()=>{
+  try{
+   const backup=JSON.parse(reader.result);
+   if(!backup||backup.app!=="JARVIS AI"||backup.formatVersion!==1||
+      !backup.memory||typeof backup.memory!=="object"||!Array.isArray(backup.aiHistory)){
+    throw new Error("This file is not a supported JARVIS backup.");
+   }
+   if(!confirm("Import this backup? It will replace the saved JARVIS memory and conversation on this device.")){
+    event.target.value="";
+    return;
+   }
+   const imported=backup.memory;
+   memory={
+    ...defaultMemory,
+    name:typeof imported.name==="string"?imported.name:"",
+    likes:Array.isArray(imported.likes)?imported.likes.filter(x=>typeof x==="string"):[],
+    dislikes:Array.isArray(imported.dislikes)?imported.dislikes.filter(x=>typeof x==="string"):[],
+    notes:Array.isArray(imported.notes)?imported.notes.filter(x=>typeof x==="string"):[],
+    tasks:Array.isArray(imported.tasks)?imported.tasks.filter(x=>typeof x==="string"):[],
+    speech:typeof imported.speech==="boolean"?imported.speech:true,
+    voice:typeof imported.voice==="string"?imported.voice:""
+   };
+   aiHistory=backup.aiHistory
+    .filter(item=>item&&
+      (item.role==="user"||item.role==="assistant")&&
+      typeof item.content==="string")
+    .slice(-16);
+   saveData();
+   saveAIHistory();
+   showMemory();
+   renderNotes();
+   renderTasks();
+   $("speechButton").textContent="VOICE: "+(memory.speech?"ON":"OFF");
+   reply("Backup imported successfully. Your saved memory, notes, tasks, and recent conversation have been restored.");
+  }catch(error){
+   alert("Could not import this backup: "+error.message);
+  }
+  event.target.value="";
+ };
+ reader.onerror=()=>{
+  alert("I couldn't read that backup file. Please try again.");
+  event.target.value="";
+ };
+ reader.readAsText(file);
+}
+
 function addNote(){
  const value=$("noteInput").value.trim();
  if(!value)return;
@@ -296,15 +377,49 @@ function addTask(){
 
 function openSite(site){
  const sites={
+  instagram:"https://www.instagram.com",
   youtube:"https://www.youtube.com",
+  snapchat:"https://web.snapchat.com",
+  spotify:"https://open.spotify.com",
+  shopify:"https://www.shopify.com",
+  tiktok:"https://www.tiktok.com",
+  facebook:"https://www.facebook.com",
+  x:"https://x.com",
+  twitter:"https://x.com",
+  discord:"https://discord.com/app",
+  reddit:"https://www.reddit.com",
+  pinterest:"https://www.pinterest.com",
+  twitch:"https://www.twitch.tv",
+  netflix:"https://www.netflix.com",
+  roblox:"https://www.roblox.com",
+  steam:"https://store.steampowered.com",
+  amazon:"https://www.amazon.com",
+  gmail:"https://mail.google.com",
   google:"https://www.google.com",
   wikipedia:"https://www.wikipedia.org",
   github:"https://github.com",
-  gmail:"https://mail.google.com"
+  chatgpt:"https://chatgpt.com",
+  microsoft:"https://www.microsoft.com",
+  outlook:"https://outlook.live.com",
+  zoom:"https://zoom.us",
+  canva:"https://www.canva.com",
+  ebay:"https://www.ebay.com",
+  disney:"https://www.disneyplus.com",
+  disneyplus:"https://www.disneyplus.com",
+  hulu:"https://www.hulu.com",
+  primevideo:"https://www.primevideo.com",
+  apple:"https://www.apple.com",
+  maps:"https://maps.google.com"
  };
- if(!sites[site])return false;
- reply("Opening "+site+".");
- window.open(sites[site],"_blank","noopener");
+ const key=site.toLowerCase().trim().replace(/\s+/g,"");
+ const url=sites[key];
+ if(url){
+  reply("Opening "+site+".");
+  window.open(url,"_blank","noopener");
+ }else{
+  reply("I don't have a direct shortcut for "+site+" yet. I'll search for its website.");
+  window.open("https://www.google.com/search?q="+encodeURIComponent(site+" official website"),"_blank","noopener");
+ }
  return true;
 }
 
@@ -461,9 +576,9 @@ function handleCommand(raw){
   return true;
  }
 
- match=t.match(/open\s+(youtube|google|wikipedia|github|gmail)/);
+ match=text.match(/^open\s+(.+?)\s*[.!?]*$/i);
  if(match){
-  openSite(match[1]);
+  openSite(match[1].trim());
   return true;
  }
 
