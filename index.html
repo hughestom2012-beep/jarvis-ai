@@ -1,0 +1,299 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS AI</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ background:#06111e;
+ color:#d9f7ff;
+ font-family:Arial,sans-serif;
+}
+header{
+ text-align:center;
+ padding:25px;
+ border-bottom:1px solid #16465d;
+}
+h1{
+ color:#35d9ff;
+ letter-spacing:7px;
+ margin:0;
+ font-size:36px;
+}
+#status{color:#65e6a5;margin-top:10px;font-size:13px}
+main{max-width:850px;margin:25px auto;padding:15px}
+.panel{
+ background:#0c1d2c;
+ border:1px solid #16465d;
+ border-radius:14px;
+ padding:18px;
+ margin-bottom:16px;
+}
+#chat{
+ height:350px;
+ overflow-y:auto;
+ display:flex;
+ flex-direction:column;
+ gap:12px;
+}
+.message{
+ padding:12px;
+ border-radius:10px;
+ max-width:90%;
+ white-space:pre-wrap;
+ line-height:1.5;
+}
+.jarvis{background:#12344a;align-self:flex-start}
+.user{background:#155b70;align-self:flex-end}
+.controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+input{
+ background:#07111e;
+ color:white;
+ border:1px solid #27718a;
+ padding:13px;
+ border-radius:8px;
+ flex:1;
+ min-width:150px;
+}
+button{
+ background:#087d9c;
+ color:white;
+ border:0;
+ border-radius:8px;
+ padding:12px 16px;
+ cursor:pointer;
+}
+button:hover{background:#0ba8ca}
+.small{font-size:13px;color:#9db9c8}
+</style>
+</head>
+<body>
+
+<header>
+ <h1>J.A.R.V.I.S.</h1>
+ <div id="status">SYSTEM ONLINE</div>
+</header>
+
+<main>
+ <div class="panel">
+  <div id="chat">
+   <div class="message jarvis">
+    Good evening. JARVIS is online. How may I assist you?
+   </div>
+  </div>
+
+  <div class="controls">
+   <input id="message" placeholder="Talk to JARVIS..." autocomplete="off">
+   <button id="send">SEND</button>
+   <button id="mic">🎤</button>
+  </div>
+ </div>
+
+ <div class="panel">
+  <h3>JARVIS MEMORY</h3>
+  <div id="memoryStatus">Loading memory...</div>
+  <p id="memoryInfo" class="small"></p>
+  <div class="controls">
+   <button id="reloadMemory">RELOAD MEMORY</button>
+  </div>
+ </div>
+</main>
+
+<script>
+(function(){
+"use strict";
+
+const MEMORY_KEY="jarvisPermanentMemory";
+
+const $=id=>document.getElementById(id);
+
+const chat=$("chat");
+const message=$("message");
+const memoryStatus=$("memoryStatus");
+const memoryInfo=$("memoryInfo");
+
+let memory={
+ name:"",
+ likes:[],
+ dislikes:[],
+ notes:[]
+};
+
+function updateMemoryInfo(){
+ memoryInfo.textContent=
+ "Name: "+(memory.name||"Unknown")+
+ " | Likes: "+(memory.likes.join(", ")||"None")+
+ " | Dislikes: "+(memory.dislikes.join(", ")||"None");
+}
+
+function saveMemory(){
+ try{
+  localStorage.setItem(MEMORY_KEY,JSON.stringify(memory));
+  memoryStatus.textContent="Memory saved successfully.";
+  updateMemoryInfo();
+ }catch(error){
+  memoryStatus.textContent="Memory error: "+error.message;
+ }
+}
+
+function loadMemory(){
+ try{
+  const saved=localStorage.getItem(MEMORY_KEY);
+  if(saved){
+   const data=JSON.parse(saved);
+   memory={
+    name:data.name||"",
+    likes:Array.isArray(data.likes)?data.likes:[],
+    dislikes:Array.isArray(data.dislikes)?data.dislikes:[],
+    notes:Array.isArray(data.notes)?data.notes:[]
+   };
+   memoryStatus.textContent="Memory loaded successfully.";
+  }else{
+   memoryStatus.textContent="Ready to learn new memories.";
+  }
+ }catch(error){
+  memoryStatus.textContent="Could not load memory: "+error.message;
+ }
+ updateMemoryInfo();
+}
+
+function addMessage(text,type){
+ const div=document.createElement("div");
+ div.className="message "+type;
+ div.textContent=text;
+ chat.appendChild(div);
+ chat.scrollTop=chat.scrollHeight;
+}
+
+function speak(text){
+ if(!("speechSynthesis" in window))return;
+ speechSynthesis.cancel();
+ const speech=new SpeechSynthesisUtterance(text);
+ speech.rate=1;
+ speech.pitch=1;
+ speechSynthesis.speak(speech);
+}
+
+function answer(text){
+ const lower=text.toLowerCase().trim();
+ let match;
+
+ match=lower.match(/my name is (.+)/i);
+ if(match){
+  memory.name=match[1].trim().replace(/[.!?]+$/,"");
+  saveMemory();
+  return "Understood. Your name is "+memory.name+". I will remember that.";
+ }
+
+ match=lower.match(/i like (.+)/i);
+ if(match){
+  const item=match[1].trim().replace(/[.!?]+$/,"");
+  if(!memory.likes.includes(item))memory.likes.push(item);
+  saveMemory();
+  return "I'll remember that you like "+item+".";
+ }
+
+ match=lower.match(/i (?:dislike|hate) (.+)/i);
+ if(match){
+  const item=match[1].trim().replace(/[.!?]+$/,"");
+  if(!memory.dislikes.includes(item))memory.dislikes.push(item);
+  saveMemory();
+  return "I'll remember that you dislike "+item+".";
+ }
+
+ if(lower.includes("what is my name")||lower.includes("what's my name")){
+  return memory.name?
+   "Your name is "+memory.name+".":
+   "You haven't told me your name yet.";
+ }
+
+ if(lower.includes("what do i like")){
+  return memory.likes.length?
+   "You like "+memory.likes.join(", ")+". ":
+   "I haven't learned your likes yet.";
+ }
+
+ if(lower.includes("what do i dislike")){
+  return memory.dislikes.length?
+   "You dislike "+memory.dislikes.join(", ")+". ":
+   "I haven't learned your dislikes yet.";
+ }
+
+ if(lower.includes("what do you remember")||lower.includes("show my memory")){
+  return "Here is what I remember. Your name is "+
+   (memory.name||"unknown")+". You like "+
+   (memory.likes.join(", ")||"nothing saved yet")+".";
+ }
+
+ if(lower.includes("hello")||lower==="hi"||lower.includes("hey")){
+  return "Hello"+(memory.name?", "+memory.name:"")+". How can I help?";
+ }
+
+ if(lower.includes("who are you")){
+  return "I am JARVIS, your personal browser-based assistant.";
+ }
+
+ if(lower.includes("time")){
+  return "The time is "+new Date().toLocaleTimeString()+".";
+ }
+
+ if(lower.includes("date")){
+  return "Today is "+new Date().toLocaleDateString()+".";
+ }
+
+ if(lower.includes("help")){
+  return "You can tell me your name, tell me what you like, ask me questions about your memories, or ask for the time and date.";
+ }
+
+ return "I'm still learning how to answer that. You can teach me things by saying, for example, I like robots.";
+}
+
+function sendMessage(){
+ const text=message.value.trim();
+ if(!text)return;
+ message.value="";
+ addMessage(text,"user");
+ const response=answer(text);
+ addMessage(response,"jarvis");
+ speak(response);
+}
+
+$("send").addEventListener("click",sendMessage);
+
+message.addEventListener("keydown",event=>{
+ if(event.key==="Enter")sendMessage();
+});
+
+$("reloadMemory").addEventListener("click",()=>{
+ loadMemory();
+ addMessage("I have reloaded my saved memories.","jarvis");
+});
+
+$("mic").addEventListener("click",()=>{
+ const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!Recognition){
+  addMessage("Speech recognition is not supported in this browser.","jarvis");
+  return;
+ }
+ const recognition=new Recognition();
+ recognition.lang="en-US";
+ recognition.onresult=event=>{
+  message.value=event.results[0][0].transcript;
+  sendMessage();
+ };
+ recognition.onerror=()=>{
+  addMessage("I couldn't hear that. Please try again.","jarvis");
+ };
+ recognition.start();
+});
+
+loadMemory();
+})();
+</script>
+
+</body>
+</html>
